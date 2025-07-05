@@ -20,9 +20,10 @@ if not os.path.exists(f'captured_frames/{input_name}'):
 
 while True:
     ret, frame = capture.read()
+    faceData = None
     
     if not ret:
-        continue
+        continue # Skip the rest of the loop if frame not captured
 
     grayFrame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
@@ -30,10 +31,15 @@ while True:
     
     for(x, y, w, h) in faces:
         cv.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-        faceData =  frame[y:y+h, x:x+w]
+        faceData =  frame[y:y+h, x:x+w] # Extracting the face region
         
     cv.imshow('Capture', frame)
-    cv.imwrite(f'captured_frames/{input_name}/frame_{currentFrame}.jpg', faceData)
+    
+    if faceData is not None:
+        cv.imwrite(f'captured_frames/{input_name}/frame_{currentFrame}.jpg', faceData)
+        print("Face Detected")
+    else:
+        print("No face detected in this frame.")
     currentFrame += 1
 
     # break the loop - stop the capture if 'q' is pressed [customize sendiri]
