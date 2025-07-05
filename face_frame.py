@@ -4,7 +4,7 @@ import tkinter as tk
 import easygui as eg
 import matplotlib
 
-face_cascade = cv.CascadeClassifier('haarcascade_frontalface_alt.xml')
+face_cascade = cv.CascadeClassifier('haarcascade_frontalface_alt.xml') #cascade pre-trained classifier for face detection
 capture = cv.VideoCapture(0)
 currentFrame = 0 
 
