@@ -23,15 +23,22 @@ def intialise_database(database_pointer):
         if database_pointer.fetchone() is None:
             
 
-            print("Creating database...")
             database_pointer.execute(f"CREATE DATABASE {db_name};")
             database_pointer.execute(f"""
-            use {db_name};                
+            use {db_name};
+
+            CREATE TABLE admin(
+                admin_id VARCHAR(100) PRIMARY KEY,
+                password VARCHAR(100) NOT NULL,  
+                created_date DATETIME NOT NULL
+            )                
 
             CREATE TABLE users(
                 user_id VARCHAR(100) PRIMARY KEY,
                 department VARCHAR(100),
-                face_image_path VARCHAR(300) NOT NULL
+                face_image_path VARCHAR(300) NOT NULL,
+                created_by VARCHAR(100) NOT NULL,
+                FOREIGN KEY (created_by) REFERENCES admin(admin_id)
             );
                                     
             CREATE TABLE attendance(
@@ -44,6 +51,10 @@ def intialise_database(database_pointer):
                                                         
                                     """)
             
+            try: 
+                database_pointer.execute(f"INSERT INTO admin (admin_id, password, created_date) VALUES (?, ?, ?)", "admin", "admin", datetime.now())
+            except Exception as e:
+                return False, e          
 
             if(os.path.exists(path)):
                 dir_list = os.listdir(path)
@@ -52,53 +63,94 @@ def intialise_database(database_pointer):
                     
                     try:
                         database_pointer.execute(
-                            "INSERT INTO users (user_id, department, face_image_path) VALUES (?, ?, ?)",
-                            (file, None, os.path.join(path, file))
+                            "INSERT INTO users (user_id, department, face_image_path, created_by) VALUES (?, ?, ?, ?)",
+                            (file, None, os.path.join(path, file), "admin")
                         )
                     except Exception as e:
-                        print(e)
-                        print(f"Fail to initialise database")
+                        return False, e
 
+        return True, None
     except Exception as e:
-        print(e)
-        print(f"Fail to initialise database")
-        exit() 
-            
-
+        return False, e
+        
     
 def insert_user(database_pointer, name, department, image_path):
-    database_pointer.execute("USE face_recognition")
-    database_pointer.execute(
-        "INSERT INTO users (user_id, department, face_image_path) VALUES (?, ?, ?)",
-        (name, department, image_path)
-    )
+    try:
+        database_pointer.execute(f"USE {database}")
+        database_pointer.execute(
+            "INSERT INTO users (user_id, department, face_image_path) VALUES (?, ?, ?)",
+            (name, department, image_path)
+        )
+        return True, None
+    except Exception as e:
+        return False, e
 
 
 def insert_attendance(database_pointer, entry_date_time, user_id):
-    database_pointer.execute("USE face_recognition")
-    database_pointer.execute(
-        "INSERT INTO attendance (entry_date_time, user_id) VALUES (?, ?)",
-        (entry_date_time , user_id)
-    )
+    try:
+        database_pointer.execute(f"USE {database}")        
+        database_pointer.execute(
+            "INSERT INTO attendance (entry_date_time, user_id) VALUES (?, ?)",
+            (entry_date_time , user_id)
+        )
+        return True, None
+    except Exception as e:
+        return False, e
+
 
 def update_attendance(database_pointer, exit_date_time, user_id):
-    database_pointer.execute("USE face_recognition")
-    database_pointer.execute("""
-        UPDATE attendance
-        SET exit_date_time = ?
-        WHERE exit_date_time = ? AND user_id = ?
-    """, (exit_date_time, '1900-01-01 00:00:00', user_id))
+    try:
+        database_pointer.execute(f"USE {database}")        
+        database_pointer.execute("""
+            UPDATE attendance
+            SET exit_date_time = ?
+            WHERE exit_date_time = ? AND user_id = ?
+        """, (exit_date_time, '1900-01-01 00:00:00', user_id))
+        return True, None
+    except Exception as e:
+        return False, e
 
 def unfinished_attendance(database_pointer, user_id):
-    database_pointer.execute("USE face_recognition")
-    database_pointer.execute("""
-        SELECT * FROM attendance 
-        WHERE user_id = ? AND exit_date_time = ?
-    """, (user_id, '1900-01-01 00:00:00'))
+    try:
+        database_pointer.execute(f"USE {database}")        
+        database_pointer.execute("SELECT * FROM attendance WHERE user_id = ? AND exit_date_time = ?", (user_id, '1900-01-01 00:00:00'))
 
-    return database_pointer.fetchone() is not None
+        return database_pointer.fetchone() is not None, None
+    except Exception as e:
+       return False, e
 
 def user_exists(database_pointer, user_id):
-    database_pointer.execute("USE face_recognition")
-    database_pointer.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
-    return database_pointer.fetchone() is not None
+
+    try :
+        database_pointer.execute(f"USE {database}")
+        database_pointer.execute("SELECT * FROM users WHERE user_id = ?", (user_id))
+        if database_pointer.fetchone() is not None:
+            return True, f"User {user_id} already exists."
+        else: 
+            return False, f"User {user_id} does not exists."
+    
+    except Exception as e:
+        return False, e
+    
+
+def deleteDatabase(database_pointer):
+    try:
+        database_pointer.execute("USE master")
+        database_pointer.execute(f"DROP DATABASE {database};")
+        return True, None
+    
+    except Exception as e:
+        return False, e
+    
+def admin_exists(database_pointer, admin_id, admin_pass):
+    try:
+        database_pointer.execute(f"USE {database}")
+        database_pointer.execute("SELECT * FROM admin WHERE admin_id = ? AND password = ?", (admin_id), (admin_pass))
+
+        if database_pointer.fetchone() is not None:
+            return True, f"Admin {admin_id} already exists."
+        else: 
+            return False, f"Admin {admin_id} does not exists."
+    
+    except Exception as e:
+        return False, e
