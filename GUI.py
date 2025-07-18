@@ -53,7 +53,7 @@ class FaceRecognitionApp:
         pass_input = Entry(login_frame, width = 50, show='*')
         pass_input.grid(row=1, column=1, padx=10, pady=10)
 
-        error_msg_label = Label(login_frame, text = "123", fg = "Red")
+        error_msg_label = Label(login_frame, text = "", fg = "Red")
         error_msg_label.grid(row = 2, columnspan= 2, padx = 10 , pady= 2, sticky = 'w')
 
         login_button = Button(login_frame, text="Login", command = login_check, width = 20) ##

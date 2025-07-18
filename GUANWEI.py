@@ -5,7 +5,6 @@ import numpy as np
 import database
 from keras_facenet import FaceNet
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow logging
 embedder = FaceNet() 
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
