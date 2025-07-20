@@ -5,12 +5,23 @@ from datetime import datetime
 database = "face_recognition"
 
 def get_connection():
-    connection = pyodbc.connect(
-        r'DRIVER={SQL Server};SERVER=localhost\SMART;UID=sa;PWD=smart',
-        autocommit=True 
-    )
+    try: 
+    
+        connection = pyodbc.connect(
+            "DRIVER={ODBC Driver 17 for SQL Server};"
+            "SERVER=localhost\\LGW;"
+            "UID=sa;"
+            "PWD=123;"
+            "Encrypt=yes;"
+            "TrustServerCertificate=yes;"
+            "Connection Timeout=5;"
+        )           
+        connection.autocommit = True
+        return connection.cursor()
+    except Exception as e:
+        # print(e)
+        exit()
 
-    return connection.cursor()
 
 def intialise_database(database_pointer):
     path = "Data\\Train"
@@ -81,7 +92,7 @@ def insert_user(database_pointer, name, department, image_path):
             "INSERT INTO users (user_id, department, face_image_path) VALUES (?, ?, ?)",
             (name, department, image_path)
         )
-        return True, None
+        return True, "User added successfully!"
     except Exception as e:
         return False, e
 
@@ -125,9 +136,9 @@ def user_exists(database_pointer, user_id):
         database_pointer.execute(f"USE {database}")
         database_pointer.execute("SELECT * FROM users WHERE user_id = ?", (user_id))
         if database_pointer.fetchone() is not None:
-            return True, f"User {user_id} already exists."
+            return True, f"User '{user_id}' already exists."
         else: 
-            return False, f"User {user_id} does not exists."
+            return False, f"User '{user_id}' does not exists."
     
     except Exception as e:
         return False, e
@@ -141,16 +152,32 @@ def deleteDatabase(database_pointer):
     
     except Exception as e:
         return False, e
-    
-def admin_exists(database_pointer, admin_id, admin_pass):
+
+def admin_exists(database_pointer, admin_id, admin_pass = None):
     try:
         database_pointer.execute(f"USE {database}")
-        database_pointer.execute("SELECT * FROM admin WHERE admin_id = ? AND password = ?", (admin_id), (admin_pass))
+
+        if admin_pass is not None: 
+            database_pointer.execute("SELECT * FROM admin WHERE admin_id = ? AND password = ?", (admin_id), (admin_pass))
+        else: 
+            database_pointer.execute("SELECT * FROM admin WHERE admin_id = ?", (admin_id))
+
 
         if database_pointer.fetchone() is not None:
-            return True, f"Admin {admin_id} already exists."
+            return True, f"Admin '{admin_id}' already exists."
         else: 
-            return False, f"Admin {admin_id} does not exists."
+            return False, f"Admin '{admin_id}' does not exists."
     
+    except Exception as e:
+        return False, e
+    
+
+def insert_admin(database_pointer, admin_id, admin_pass):
+    try:
+        database_pointer.execute(f"USE {database}")
+        database_pointer.execute("INSERT INTO admin (admin_id, password, created_date) VALUES (?, ?, ?)",
+            (admin_id, admin_pass, datetime.now())
+        )
+        return True, "Admin added successfully!"
     except Exception as e:
         return False, e
