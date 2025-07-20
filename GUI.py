@@ -2,34 +2,39 @@ from tkinter import *
 from tkinter import messagebox
 import cv2
 from PIL import Image, ImageTk
-import GUANWEI as Test2
+import Test2
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
 
 class FaceRecognitionApp:
+
     def __init__(self, root):
         self.root = root
         self.root.geometry("800x600")
 
         self.root.focus_set() 
         self.root.geometry(f"+{self.root.winfo_x() + 300}+{self.root.winfo_y() + 200}")
+        self.login_id = None
 
         self.setup_login_page()
+
+    
 
     def setup_login_page(self):
 
         def login_check():
             admin_id = id_input.get().strip()
-            password = pass_input.get().strip()
+            password = pass_input.get()
 
             if admin_id == "" or password == "":
                 error_msg_label.config(text = "Please enter both ID and Password.")
                 return
             
-            exists, message = Test2.admin_login(admin_id, password)
+            exists, message = Test2.check_admin_exists(admin_id, password)
 
             if exists: 
+                self.login_id = admin_id
                 self.system_page()
                 id_input.delete(0, 'end')
                 pass_input.delete(0, 'end')
@@ -57,7 +62,12 @@ class FaceRecognitionApp:
         error_msg_label.grid(row = 2, columnspan= 2, padx = 10 , pady= 2, sticky = 'w')
 
         login_button = Button(login_frame, text="Login", command = login_check, width = 20) ##
-        login_button.grid(row=3, columnspan = 2, pady=5)
+        login_button.grid(row=3, column = 1, pady=5, sticky = 'e', padx = 5)
+
+
+
+
+
 
     def system_page(self):
         self.root.withdraw() 
@@ -71,6 +81,7 @@ class FaceRecognitionApp:
 
         cam = None
         camera_label = Label(page, width = 498, height = 532)
+
 
         def clean_camera():
             nonlocal cam
@@ -220,6 +231,75 @@ class FaceRecognitionApp:
             page.destroy()
             self.root.deiconify()
 
+        def admin_registration():
+            self.root.withdraw()
+            register_window = Toplevel()
+            register_window.geometry("400x150")
+            register_window.title("Register Page")
+
+            register_window.focus_set()
+            register_window.grab_set() 
+            register_window.transient(page) 
+
+            register_window.geometry(f"+{page.winfo_x() + 300}+{page.winfo_y() + 200}")
+
+            admin_id_label = Label(register_window, text = "Admin ID")
+            admin_id_label.grid(row = 0, column =0, padx = 10, pady = 5)  
+
+            admin_id_input = Entry(register_window, width = 50)
+            admin_id_input.grid(row = 0, column = 1, padx = 10, pady = 5)
+            
+            admin_pass_label = Label(register_window, text = "Password")
+            admin_pass_label.grid(row = 1, column =0, padx = 10, pady = 5)  
+
+            admin_pass_input = Entry(register_window, width = 50, show = '*')
+            admin_pass_input.grid(row = 1, column = 1, padx = 10, pady = 5)
+
+            error_msg_label = Label(register_window, text = "", fg = "red")
+            error_msg_label.grid(row = 2, columnspan = 2, sticky = 'w', padx = 10, pady = 5)
+
+            def handle_add_admin():
+                admin_id = admin_id_input.get().strip()
+                admin_pass = admin_pass_input.get()
+
+                if admin_id == "": 
+                    error_msg_label.config(text = "Admin ID cannot be empty.", fg = "red")
+                    return
+                elif admin_pass == "":
+                      error_msg_label.config(text = "Password cannot be empty.", fg = "red")
+                else: 
+                    result, message = Test2.check_admin_exists(admin_id)
+
+                    if result: 
+                        error_msg_label.config(text = message, fg = "red")
+                        return
+                    
+                    else:
+                        added, message = Test2.add_admin(admin_id, admin_pass)
+
+                        if added: 
+                            error_msg_label.config(text = "Admin added successfully!", fg = "green")
+
+                            messagebox.showinfo("Admin Registration", message)
+
+                            register_window.destroy()
+
+                        else:
+                            messagebox.showerror("Error", message)
+                            return   
+                    
+            add_button = Button (register_window, text="Submit", width=20, command = handle_add_admin)
+            add_button.grid(row=3, columnspan=2, pady=10, padx = 10)
+        
+
+                        
+                        
+
+
+            
+
+
+
         ## add user page
         def add_user_page():
             add_user_window = Toplevel()
@@ -254,7 +334,7 @@ class FaceRecognitionApp:
                 department = department_input.get().strip()
 
                 if name == "":
-                    msg_label.config(text = "Name cannot be empty", fg = "red")
+                    msg_label.config(text = "Name cannot be empty.", fg = "red")
                     return
                 
                 result, message = Test2.check_user_exists(name_input.get())
@@ -264,18 +344,22 @@ class FaceRecognitionApp:
                     return 
                 
                 else:
-                    isTrue, message = Test2.add_new_user(name, department)
-                    msg_label.config(text = "User added successfully!", fg = "green")
-                    add_user_window.destroy()
+                    isTrue, message = Test2.add_new_user(name, department, self.login_id)
+            
 
                     if isTrue:
+                        msg_label.config(text = message, fg = "green")
+                        add_user_window.destroy()
+
                         clean_camera() 
                         
                         camera_sensor_btn.grid_remove() 
 
                         camera_label.grid(row=0, rowspan = 15, column=0, padx=19, pady=10)  
                     
-                        camera_sensor_btn_click(mode = 'capture', username=name)       
+                        camera_sensor_btn_click(mode = 'capture', username=name)  
+
+                        messagebox.showinfo("Success", message)     
                     else: 
                         messagebox.showerror("Error", message)
                         return   
@@ -327,6 +411,9 @@ class FaceRecognitionApp:
         
         camera_sensor_btn = Button(page, bg = "Black", text="Loading....", command = camera_sensor_btn_click, width = 70, height = 35)
         camera_sensor_btn.grid(row=0, rowspan = 15, column=0, padx=20, pady=10)  
+
+        add_admin_btn = Button (page, text = "Add Admin", width = 30, command = admin_registration)
+        add_admin_btn.grid(row=4 , column=1, padx=0, pady=0)  
 
         add_user_btn = Button(page, text = "Add New User", width = 30, height = 8, command = add_user_page)
         add_user_btn.grid(row = 5, column = 1, padx=0, pady=0)

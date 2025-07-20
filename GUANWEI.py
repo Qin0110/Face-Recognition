@@ -12,6 +12,42 @@ face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_fronta
 def check_user_exists(user_id):
     return database.user_exists(database.get_connection(), user_id)
 
+def add_new_user(name, department = None, created_by = None):
+    
+    try:
+        user_dir = os.path.join("Data\\Train", name)
+
+        if os.path.exists(user_dir):
+            return False, f"User directory already exists for {name}"
+            
+        os.makedirs(user_dir, exist_ok=True)
+        
+        isTrue, message = database.insert_user(database.get_connection(), name, department, user_dir, created_by)
+        
+        if not isTrue:
+            if os.path.exists(user_dir):
+                os.rmdir(user_dir)
+            return False, f"Database error: {message}"
+            
+        return True, message
+        
+    except Exception as e:
+        if os.path.exists(user_dir):
+            os.rmdir(user_dir)
+        return False, f"Error adding user: {e}"
+
+def check_admin_exists(admin_id, admin_pass= None):
+    return database.admin_exists(database.get_connection(), admin_id, admin_pass)
+
+
+def add_admin(admin_id, admin_pass):
+    return database.insert_admin(database.get_connection(),admin_id, admin_pass)
+    
+
+
+
+
+
 
 def get_embedding(face_img):
     # RGB and size (160x160)
@@ -136,29 +172,6 @@ def verificationImages(img):
     return True
 
 
-def add_new_user(name, department=None):
-    
-    try:
-        user_dir = os.path.join("Data\\Train", name)
-
-        if os.path.exists(user_dir):
-            return False, f"User directory already exists for {name}"
-            
-        os.makedirs(user_dir, exist_ok=True)
-        
-        isTrue, message = database.insert_user(database.get_connection(), name, department, user_dir)
-        
-        if not isTrue:
-            if os.path.exists(user_dir):
-                os.rmdir(user_dir)
-            return False, f"Database error: {message}"
-            
-        return True, None
-        
-    except Exception as e:
-        if os.path.exists(user_dir):
-            os.rmdir(user_dir)
-        return False, f"Error adding user: {e}"
     
 
 def capturing_images(frame, face_crop, name, count):
@@ -177,7 +190,7 @@ def take_attendance(result, resultNum, status):
     max_index = resultNum.index(max(resultNum)) 
     final_name = result[max_index]       
 
-    exists, existMsg = database.user_exists(database.get_connection(), final_name)
+    exists, existMsg = check_user_exists(final_name)
     if not exists:
             return False, "User does not exist. Please register first."
     
@@ -361,6 +374,4 @@ def intialise_database():
     return True, None
 
 
-def admin_login(admin_id, password):
-    return database.admin_exists(database.get_connection(), admin_id, password)
 

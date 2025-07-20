@@ -74,8 +74,8 @@ def intialise_database(database_pointer):
                     
                     try:
                         database_pointer.execute(
-                            "INSERT INTO users (user_id, department, face_image_path, created_by) VALUES (?, ?, ?, ?)",
-                            (file, None, os.path.join(path, file), "admin")
+                            "INSERT INTO users (user_id, department, face_image_path, created_by) VALUES (?, ?, ?)",
+                            (file, None, os.path.join(path, file))
                         )
                     except Exception as e:
                         return False, e
@@ -85,12 +85,12 @@ def intialise_database(database_pointer):
         return False, e
         
     
-def insert_user(database_pointer, name, department, image_path):
+def insert_user(database_pointer, name, department, image_path, created_by):
     try:
         database_pointer.execute(f"USE {database}")
         database_pointer.execute(
-            "INSERT INTO users (user_id, department, face_image_path) VALUES (?, ?, ?)",
-            (name, department, image_path)
+            "INSERT INTO users (user_id, department, face_image_path, created_by) VALUES (?, ?, ?, ?)",
+            (name, department, image_path, created_by)
         )
         return True, "User added successfully!"
     except Exception as e:
