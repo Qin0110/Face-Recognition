@@ -11,7 +11,7 @@ def get_connection():
             "DRIVER={ODBC Driver 17 for SQL Server};"
             "SERVER=localhost\\LGW;"
             "UID=sa;"
-            "PWD=smart;"
+            "PWD=123;"
             "Encrypt=yes;"
             "TrustServerCertificate=yes;"
             "Connection Timeout=5;"
