@@ -13,3 +13,7 @@ If using other version, find the corresponding version of dlib files in github /
 ## Then: `pip install .\dlib-19.24.99-cp312-cp312-win_amd64.whl` Note: type `pip install dlib` then press 'tab'
 
 type `pip install -r ./requirements.txt`
+
+## SQL Installation and Connection
+
+Refer to SQL_Installation_and_Connection to setup the SQL. Make sure follow the steps to setup the SQL before running the program 
