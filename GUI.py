@@ -596,26 +596,26 @@ class FaceRecognitionApp:
         camera_sensor_btn = Button(page, bg = "Black", text="Loading....", command = camera_sensor_btn_click, width = 70, height = 35)
         camera_sensor_btn.grid(row=0, rowspan = 15, column=0, padx=20, pady=10)  
 
-        add_admin_btn = Button (page, text = "Add New Admin", width = 30, command = admin_registration)
+        add_admin_btn = Button (page, text = "Add New Admin", width = 30, height = 5, command = admin_registration)
         add_admin_btn.grid(row=4 , column=1, padx=0, pady=0)  
 
-        add_user_btn = Button(page, text = "Add New User", width = 30, height = 8, command = add_user_page)
+        add_user_btn = Button(page, text = "Add New User", width = 30, height = 5, command = add_user_page)
         add_user_btn.grid(row = 5, column = 1, padx=0, pady=0)
 
-        attendance_button = Button(page, text = "Take Attendance", width = 30, height = 8, command = attendance)
+        attendance_button = Button(page, text = "Take Attendance", width = 30, height = 5, command = attendance)
         attendance_button.grid (row = 6, column = 1, padx=0, pady=0)
 
-        train_model_btn = Button(page, text = "Train Model", width = 30, height = 8, command = train_modeL)
+        train_model_btn = Button(page, text = "Train Model", width = 30, height = 5, command = train_modeL)
         train_model_btn.grid(row = 7, column = 1, padx=0, pady=0)
 
         page_msg_label = Label(page, text = "Camera Closed", fg = 'Red', font=("Arial", 20))
         page_msg_label.grid(row = 15, column = 0, padx = 20, pady=0, sticky= "NW")
 
-        display_user_btn = Button(page, text = "User Information", fg = "Black", width = 30, command = display_user)
-        display_user_btn.grid(row = 8, column =  1, padx = 10, pady = 10)
+        display_user_btn = Button(page, text = "User Information", fg = "Black", width = 30, height = 5, command = display_user)
+        display_user_btn.grid(row = 8, column =  1, padx=0, pady=0)
             
-        logout_btn = Button(page, text="Logout", command=logout, width=30)
-        logout_btn.grid(row = 9, column = 1, padx=10, pady=10)
+        logout_btn = Button(page, text="Logout", command=logout, width=30, height = 5)
+        logout_btn.grid(row = 9, column = 1, padx=10, pady=5)
 
 def main():
     isTrue, message = Test2.intialise_database()
