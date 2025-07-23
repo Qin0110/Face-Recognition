@@ -2,7 +2,7 @@ from tkinter import *
 from tkinter import messagebox
 import cv2
 from PIL import Image, ImageTk
-import Test2
+import GUANWEI as Test2
 import threading
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
