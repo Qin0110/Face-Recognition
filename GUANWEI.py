@@ -4,6 +4,7 @@ from datetime import datetime
 import numpy as np
 import database
 from keras_facenet import FaceNet
+from PIL import Image, ImageTk
 
 embedder = FaceNet() 
 
@@ -42,7 +43,30 @@ def check_admin_exists(admin_id, admin_pass= None):
 
 def add_admin(admin_id, admin_pass):
     return database.insert_admin(database.get_connection(),admin_id, admin_pass)
+
+def display_user():
+    return database.display_user(database.get_connection())
+
+def display_user_info(user_id):
+    return database.display_user_info(database.get_connection(), user_id)
     
+
+def get_profile_img(user_id, img_base_path):
+    for i in range(100):
+        trial_path = os.path.join(img_base_path, f"{user_id}_{i}.jpg")
+        if os.path.exists(trial_path):
+            full_image_path = trial_path
+            return full_image_path
+        
+    return None
+
+def delete_user(user_id, image_path):
+    if os.path.isfile(image_path):
+        os.remove(image_path)
+    return database.delete_user(database.get_connection(), user_id)
+
+def update_user_info(user_id, department_new):
+    return database.update_user_data(database.get_connection(), user_id, department_new)
 
 
 
@@ -84,7 +108,6 @@ def load_embeddings(path):
                 embedding = get_embedding(img)
                 user_embedding.append(embedding)
             except Exception as e:
-                print(f"Error processing {image_path}: {e}")
                 continue
 
         if user_embedding:
@@ -105,7 +128,7 @@ def precompute_embeddings():
     
     
     np.savez(embeddings_path, embeddings=embeddings, labels=labels)
-    print(f"Saved embeddings for {len(labels)} users")
+    return (f"Saved embeddings for {len(labels)} users")
     
 
 def load_precomputed_embeddings():
@@ -113,7 +136,6 @@ def load_precomputed_embeddings():
     embeddings_path = 'Data\\embeddings.npz'
 
     if not os.path.exists(embeddings_path):
-        print("No precomputed embeddings found. Please run 'Precompute embeddings' first.")
         return None, None
     
     try:
@@ -122,7 +144,6 @@ def load_precomputed_embeddings():
         labels = data['labels']
         return embeddings, labels
     except Exception as e:
-        print(f"Error loading precomputed embeddings: {e}")
         return None, None
 
 def identify_face_euclidean(face_embedding, stored_embeddings, stored_labels, threshold=0.6):
@@ -171,9 +192,6 @@ def verificationImages(img):
 
     return True
 
-
-    
-
 def capturing_images(frame, face_crop, name, count):
     if verificationImages(frame):
         cv2.imwrite(f"Data\\Train\\{name}\\{name}_{count}.jpg", cv2.resize(face_crop, (250, 250)))
@@ -199,7 +217,7 @@ def take_attendance(result, resultNum, status):
         if hasUnfinished:
             return False, "You must check out before checking in again...."
         
-        isInserted, insertMsg, message = database.insert_attendance(database.get_connection(), datetime.now(), final_name)
+        isInserted, message = database.insert_attendance(database.get_connection(), final_name)
 
         if isInserted:
             return True, f"Entry recorded for {final_name} successfully"
@@ -220,140 +238,108 @@ def take_attendance(result, resultNum, status):
             return False, "You must check in before checking out...."
 
 
+def close_camera(cam):
+    if cam is not None:
+        cam.release()
+        cv2.destroyAllWindows()
 
-# def process_camera( mode, name=None, status=None):
-#     cam = cv2.VideoCapture(0)
-#     count = 0
-#     max_count = 100 if mode == 'capture' else 5  
-#     start_time = time.time()
-#     result = []
-#     resultNum = []  
-#     face_detected = False  
+def open_camera():
+    cam = cv2.VideoCapture(0)
+    if not cam.isOpened():
+        return None
     
-#     if mode == 'identify':
-#         stored_embeddings, stored_labels = load_precomputed_embeddings()
-#         if stored_embeddings is None or len(stored_embeddings) == 0:
-#             print("No precomputed embeddings found. Please run 'Precompute embeddings' first.")
-#             cam.release()
-#             cv2.destroyAllWindows()
-#             return False
-    
-#     print(f"Starting camera for {mode} mode. Press ESC to exit.")
-    
-#     while count < max_count and time.time() - start_time < 30:
-#         ret, frame = cam.read()
-#         if not ret:
-#             cam.release()
-#             cv2.destroyAllWindows()
-#             return False
-            
-#         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-#         face_detection = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
-        
-#         # face detection
-#         if len(face_detection) > 0:
-#             face_detected = True
-#             cv2.putText(frame, f"Faces detected: {len(face_detection)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-#         else:
-#             cv2.putText(frame, "No faces detected", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        
-#         for (x, y, w, h) in face_detection:
-#             face_crop = frame[y:y+h, x:x+w]
-            
-#             if mode == 'capture':  
-#                 if verificationImages(frame):
-#                     cv2.imwrite(f"Data\\Train\\{name}\\{name}_{count}.jpg", cv2.resize(face_crop, (250, 250)))
-#                     count += 1
-#                     cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (0, 255, 0), 2)
-#                     cv2.putText(frame, f"Captured: {count}", (x, y-30), 
-#                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    return cam
 
-#             else:  # identify
-#                 #show face detection box
-#                 cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (255, 255, 0), 2)
-                
-#                 if verificationImages(frame):
-#                     print(f"Processing face {count + 1}...")  # Debug info
-                    
-#                     try:
-#                         # get embedding for current face
-#                         face_embedding = get_embedding(face_crop)
+
+def update_camera(cam, mode, status, username, camera_label, page, stored_embeddings, stored_labels):
+    result = []
+    resultNum = []
+    count = 0
+    is_updating = True
+    max_count = 100 if mode == 'capture' else 10 if mode == 'attendance' else 0
+
+    while (count < max_count if mode == 'capture' else count < max_count if mode == 'attendance' else is_updating):                
+        if not is_updating:  
+            break
+        
+        if cam is not None and cam.isOpened():
+            isTrue, frame = cam.read()
+
+            if isTrue:
+                grayImage = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                face_detection = face_cascade.detectMultiScale(grayImage, scaleFactor=1.1, minNeighbors=5)       
+                if len(face_detection) > 0:
+                    cv2.putText(frame, f"Faces detected: {len(face_detection)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                else:
+                    cv2.putText(frame, "No faces detected", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+                for (x, y, w, h) in face_detection:
+                    face_crop = frame[y:y+h, x:x+w]
+
+                    if mode == 'capture':
+                        if(capturing_images(frame = frame, face_crop = face_crop, name = username, count = count)):
+                            cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (0, 255, 0), 2)
+                            cv2.putText(frame, f"Captured: {count}", (x, y-30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                            count += 1
+
+                        if count >= 10:  # Stop after 10 captures
+                            close_camera(cam)
+                            camera_label.grid_remove()
+                            is_updating = False
+                            break
                         
-#                         # identify face
-#                         identified_user, distance = identify_face_euclidean(face_embedding, stored_embeddings, stored_labels)
-                        
-#                         print(f"Similarity: {distance:.3f}")  
-                        
-#                         if identified_user is not None:
-#                             cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (0, 255, 0), 2)
-#                             cv2.putText(frame, f"{identified_user} ({distance:.2f})", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-                            
-#                             count += 1
-                            
-#                             # track results
-#                             if identified_user not in result: 
-#                                 result.append(identified_user)   
-#                                 resultNum.append(1) 
-#                             else: 
-#                                 index = result.index(identified_user)
-#                                 resultNum[index] += 1
+                        cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (255, 255, 0), 2)
+
+                    if mode == None or mode == 'attendance':
+                        if(verificationImages(frame)):
+                            try:
+                                face_embedding = get_embedding(face_crop)
+
+                                identified_user, distance = identify_face_euclidean(face_embedding, stored_embeddings, stored_labels)
                                 
-#                             print(f"Identified: {identified_user} (confidence: {distance:.3f})")
-#                         else:
-#                             cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (0, 0, 255), 2)
-#                             cv2.putText(frame, f"Unknown ({distance:.2f})", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-#                             print(f"Unknown face detected (similarity: {distance:.3f})")
-                            
-#                     except Exception as e:
-#                         print(f"Error processing face: {e}")
-#                         cv2.putText(frame, "Error", (x, y-10), 
-#                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-#                 else:
-#                     cv2.putText(frame, "Face verification failed", (x, y-10), 
-#                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
-                                    
-#         cv2.imshow("Face Recognition", frame)
-#         if cv2.waitKey(1) == 27:
-#             cam.release()
-#             cv2.destroyAllWindows()
-#             return False
-    
-#     cam.release()
-#     cv2.destroyAllWindows()
+                                if identified_user is not None:
+                                    cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (0, 255, 0), 2)
+                                    cv2.putText(frame, f"{identified_user} ({distance:.2f})", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
 
-#     if mode == 'identify':
-#         print(f"\nSession Summary:")
-#         print(f"Face detected: {face_detected}")
-#         print(f"Results: {result}")
-#         print(f"Result counts: {resultNum}")
-        
-#         if result and resultNum:
-#             max_index = resultNum.index(max(resultNum)) 
-#             final_name = result[max_index] 
-            
-#             if database.user_exists(database.get_connection(), final_name):
-#                 if status == 'Enter':
-#                     if database.unfinished_attendance(database.get_connection(), final_name):
-#                         print("You must check out before checking in again....")
-#                     else:
-#                         database.insert_attendance(database.get_connection(), datetime.now(), final_name)
-#                         print(f"✓ Entry recorded for {final_name}")
-                        
-#                 else:  # exit 
-#                     database.update_attendance(database.get_connection(), datetime.now(), final_name)
-#                     print(f"✓ Exit recorded for {final_name}")
-                    
-#             else:
-#                 print("User does not exist. Please register first.")
-#                 return False
-#         else:
-#             if face_detected:
-#                 print("Faces were detected but none were identified (may be unknown users or low confidence).")
-#             else:
-#                 print("No faces were detected during the session.")
-#             return False
+                                    if mode == 'attendance':
+                                        count += 1
+                                        if identified_user not in result:
+                                            result.append(identified_user)
+                                            resultNum.append(1)
+                                        else: 
+                                            index  = result.index(identified_user)
+                                            resultNum[index] += 1
+                                        
+                                else:
+                                    cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (0, 0, 255), 2)
+                                    cv2.putText(frame, f"Unknown ({distance:.2f})", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                            except Exception as e:
+                                cv2.putText(frame, "Error", (x, y-10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                        else:
+                            cv2.putText(frame, "Face verification failed", (x, y-10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
 
-#     return True
+                img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                img = img.resize((498, 532))  # Resize for better fit
+                imgtk = ImageTk.PhotoImage(image=img)
+
+                camera_label.imgtk = imgtk
+                camera_label.configure(image=imgtk)
+
+                page.update()
+            else:
+                break
+        else:
+            break
+
+    if mode == 'attendance' and count >= max_count:
+        isTrue, message = take_attendance(result, resultNum, status)
+        return isTrue, message
+    return None, None
+
+
 
 
 def intialise_database():

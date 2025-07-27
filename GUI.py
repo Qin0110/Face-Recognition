@@ -2,10 +2,10 @@ from tkinter import *
 from tkinter import messagebox
 import cv2
 from PIL import Image, ImageTk
-import Test2
+import GUANWEI as Test2
+import threading
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-
 
 class FaceRecognitionApp:
 
@@ -19,19 +19,18 @@ class FaceRecognitionApp:
 
         self.setup_login_page()
 
-    
 
     def setup_login_page(self):
 
         def login_check():
             admin_id = id_input.get().strip()
-            password = pass_input.get()
+            admin_pass = pass_input.get().strip().replace(" ", "")
 
-            if admin_id == "" or password == "":
+            if admin_id == "" or admin_pass == "":
                 error_msg_label.config(text = "Please enter both ID and Password.")
                 return
             
-            exists, message = Test2.check_admin_exists(admin_id, password)
+            exists, message = Test2.check_admin_exists(admin_id, admin_pass)
 
             if exists: 
                 self.login_id = admin_id
@@ -41,7 +40,7 @@ class FaceRecognitionApp:
                 error_msg_label.config(text = "")
 
             else: 
-                error_msg_label.config(text = message)
+                error_msg_label.config(text = "Admin ID or Password is incorrect")
 
         login_frame = LabelFrame(self.root, padx=20, pady=20)
         login_frame.pack(padx=20, pady=200)
@@ -70,10 +69,14 @@ class FaceRecognitionApp:
 
 
     def system_page(self):
-        self.root.withdraw() 
+        if self.root.winfo_exists:
+            self.root.withdraw() 
+
+        
         page = Toplevel()
         page.geometry("800x600")
         page.title("SYSTEM Page")
+        page.resizable(False, False)
         
         page.focus_set() 
 
@@ -82,153 +85,58 @@ class FaceRecognitionApp:
         cam = None
         camera_label = Label(page, width = 498, height = 532)
 
+        def disable_close():
+            pass 
 
-        def clean_camera():
-            nonlocal cam
-            if cam is not None:
-                cam.release()
-                cv2.destroyAllWindows()
-                cam = None
 
+
+        def hide_camera(event = None):
+            page_msg_label.config(text = "Camera Closed", fg = "Red")
+            Test2.close_camera(cam)
+            camera_label.grid_remove()
+            camera_sensor_btn.grid(row=0, column=0, padx=20, pady=10)  
 
         def camera_sensor_btn_click(mode = None, status = None, username = None):
             page_msg_label.config(text = "Opening Camera...", fg = "Red")
             nonlocal cam
-            is_updating = True
             camera_sensor_btn.grid_remove() 
-            count = 0
 
 
             camera_label.grid(row=0, rowspan = 15, column=0, padx=19, pady=10)  
 
-
-            clean_camera()
-            cam = cv2.VideoCapture(0)
+            Test2.close_camera(cam)
+            cam = Test2.open_camera()
             if not cam.isOpened():
                 messagebox.showerror('Camera Error', 'Error: Could not open camera.')
                 return
             
-            def hide_camera(event):
-                page_msg_label.config(text = "Camera Closed", fg = "Red")
-                clean_camera()
-                is_updating = False
-                camera_label.grid_remove()
-                camera_sensor_btn.grid(row=0, column=0, padx=20, pady=10)  
-
-            def update_camera():
-                nonlocal cam, is_updating, count
-                page_msg_label.config(text = "Capturing...", fg = "Green")
-                result = []
-                resultNum = []
-                max_count = 100 if mode == 'capture' else 10 if mode == 'attendance' else 0
-
-                while (count < max_count if mode == 'capture' else count < max_count if mode == 'attendance' else is_updating):                
-                    if not is_updating:  
-                        break
-                    
-                    if cam is not None and cam.isOpened():
-            
-                        isTrue, frame = cam.read()
-
-                        if isTrue:
-                    
-                            grayImage = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                            face_detection = face_cascade.detectMultiScale(grayImage, scaleFactor=1.1, minNeighbors=5)       
-                            if len(face_detection) > 0:
-                                cv2.putText(frame, f"Faces detected: {len(face_detection)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                            else:
-                                cv2.putText(frame, "No faces detected", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-                            for (x, y, w, h) in face_detection:
-                                face_crop = frame[y:y+h, x:x+w]
-
-                                if mode == 'capture':
-                                    if(Test2.capturing_images(frame = frame, face_crop = face_crop, name = username, count = count)):
-                                        cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (0, 255, 0), 2)
-                                        cv2.putText(frame, f"Captured: {count}", (x, y-30), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                                        count += 1
-
-                                    if count >= 10:  # Stop after 10 captures
-                                        clean_camera()
-                                        camera_label.grid_remove()
-                                        camera_sensor_btn.grid(row=0, column=0, padx=20, pady=10)
-                                        page_msg_label.config(text = "Camera Closed", fg = "Red")
-                                        break
-                        
-                                cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (255, 255, 0), 2)
-
-                                if mode == None or mode == 'attendance':
-                                    if(Test2.verificationImages(frame)):
-                                        try:
-                                            face_embedding = Test2.get_embedding(face_crop)
-
-                                            identified_user, distance = Test2.identify_face_euclidean(face_embedding, stored_embeddings, stored_labels)
-                                            
-                                            if identified_user is not None:
-                                                cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (0, 255, 0), 2)
-                                                cv2.putText(frame, f"{identified_user} ({distance:.2f})", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-
-                                                if mode == 'attendance':
-                                                    count += 1
-                                                    if identified_user not in result:
-                                                        result.append(identified_user)
-                                                        resultNum.append(1)
-                                                    else: 
-                                                        index  = result.index(identified_user)
-                                                        resultNum[index] += 1
-                                                    
-                                                    
-
-                                            else:
-                                                cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (0, 0, 255), 2)
-                                                cv2.putText(frame, f"Unknown ({distance:.2f})", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                                        except Exception as e:
-                                            messagebox.showerror(f'Error processing face: {e}')
-                                            cv2.putText(frame, "Error", (x, y-10), 
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                                    else:
-                                        cv2.putText(frame, "Face verification failed", (x, y-10), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
-
-                            # frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                            img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                            img = img.resize((498, 532))  # Resize for better fit
-                                        
-                            imgtk = ImageTk.PhotoImage(image=img)
-
-                            camera_label.imgtk = imgtk
-
-                            camera_label.configure(image=imgtk)
-
-                            page.update()
-                    else: 
-                        break
-
-                if mode == 'attendance' and count >= max_count:
-                    isTrue, message = Test2.take_attendance(result, resultNum, status)
-                    if isTrue:
-                        messagebox.showinfo("Attendance Status", message)
-                        
-                    else:
-                        messagebox.showerror("Attendance Status", message)
-
-                    clean_camera()
-                    camera_label.grid_remove()
-                    camera_sensor_btn.grid(row=0, column=0, padx=20, pady=10)
-                    page_msg_label.config(text = "Camera Closed", fg = "Red")
-
-                return
-        
             camera_label.bind("<Button-1>", hide_camera) 
             
             stored_embeddings, stored_labels = Test2.load_precomputed_embeddings()
+            
+            try: 
+                isTrue, message = Test2.update_camera(cam, mode, status, username, camera_label, page, stored_embeddings, stored_labels)
 
-            update_camera()   
+                if isTrue:
+                    messagebox.showinfo("Attendance Status", message)
+                elif message:
+                    messagebox.showerror("Attendance Status", message)
+
+                Test2.close_camera(cam)
+                camera_label.grid_remove()
+                camera_sensor_btn.grid(row=0, column=0, padx=20, pady=10)
+                page_msg_label.config(text = "Camera Closed", fg = "Red")
+            except Exception as e:
+                pass
+                    
+            
+       
 
         def logout():
-            clean_camera()
-            page.destroy()
+            Test2.close_camera(cam) 
+            camera_label.grid_remove()  
+            page_msg_label.config(text="Camera Closed", fg="Red")
+            page.after(100, page.destroy)
             self.root.deiconify()
 
         def admin_registration():
@@ -236,6 +144,8 @@ class FaceRecognitionApp:
             register_window = Toplevel()
             register_window.geometry("400x150")
             register_window.title("Register Page")
+
+            register_window.resizable(False, False)
 
             register_window.focus_set()
             register_window.grab_set() 
@@ -267,6 +177,10 @@ class FaceRecognitionApp:
                     return
                 elif admin_pass == "":
                       error_msg_label.config(text = "Password cannot be empty.", fg = "red")
+                      return
+                elif admin_pass != admin_pass.rstrip():
+                    error_msg_label.config(text = "Password cannot end with space", fg = "red")
+                    return
                 else: 
                     result, message = Test2.check_admin_exists(admin_id)
 
@@ -296,15 +210,16 @@ class FaceRecognitionApp:
                         
 
 
-            
-
+        
 
 
         ## add user page
         def add_user_page():
             add_user_window = Toplevel()
-            add_user_window.geometry("300x250")
+            add_user_window.geometry("300x200")
             add_user_window.title("Add User Page")  
+
+            add_user_window.resizable(False, False)
 
             add_user_window.grab_set() 
             add_user_window.transient(page) 
@@ -313,18 +228,25 @@ class FaceRecognitionApp:
             add_user_window.geometry(f"+{page.winfo_x() + 300}+{page.winfo_y() + 200}")
 
 
+
+            def on_key_release(*args):
+                var.set(var.get().upper())
+
+            var = StringVar()
+            var.trace_add("write", on_key_release)
+
             input_frame = Frame (add_user_window)
             input_frame.grid(pady = 20)
 
-            name_label = Label(input_frame, text="Name")
-            name_label.grid(row=0, column=0, sticky="w", padx=10, pady=10)
-            name_input = Entry(input_frame, width=30)
-            name_input.grid(row=0, column=1, padx=0, pady=10)  
+            name_label = Label(input_frame, text="User ID")
+            name_label.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+            name_input = Entry(input_frame, width=30, textvariable=var)
+            name_input.grid(row=0, column=1, padx=0, pady=5)  
 
             department_label = Label(input_frame, text="Department")
-            department_label.grid(row=1, column=0, sticky="w", padx=10, pady=10)
+            department_label.grid(row=1, column=0, sticky="w", padx=10, pady=5)
             department_input = Entry(input_frame, width=30)   
-            department_input.grid(row=1, column=1, padx=0, pady=10)
+            department_input.grid(row=1, column=1, padx=0, pady=5)
 
             msg_label = Label(input_frame, text=f"")
             msg_label.grid(row=2, columnspan=2, pady=10, sticky= "w")
@@ -351,7 +273,7 @@ class FaceRecognitionApp:
                         msg_label.config(text = message, fg = "green")
                         add_user_window.destroy()
 
-                        clean_camera() 
+                        Test2.close_camera(cam)
                         
                         camera_sensor_btn.grid_remove() 
 
@@ -369,8 +291,10 @@ class FaceRecognitionApp:
 
         ##take attendance
         def attendance():
+
             
             def take_attendance():
+
                 selected_status = status.get()
                 if selected_status not in ['Enter', 'Exit']:
                     error_msg.config(text = "Please Select An Option.", fg = "red")
@@ -380,9 +304,18 @@ class FaceRecognitionApp:
                     camera_sensor_btn_click(mode = 'attendance', status = selected_status, username = None)
             
 
+            stored_embeddings, stored_labels = Test2.load_precomputed_embeddings()
+
+
+            if stored_embeddings is None or stored_labels is None:
+                    messagebox.showerror("Error", "No training model found. Please run 'Training Model' first.")
+                    return
+
             attendance_window = Toplevel()
             attendance_window.geometry("200x140")
             attendance_window.title("Take Attendance")  
+
+            attendance_window.resizable(False, False)
 
             attendance_window.grab_set()  
             attendance_window.transient(page)  
@@ -408,27 +341,281 @@ class FaceRecognitionApp:
             submit_btn = Button(submit_frame, text = "Submit", width = 20, height = 2, command = take_attendance)
             submit_btn.grid(row = 2 , column=0, padx=0, pady=2, sticky = 'w')
 
+
+        def display_user():
+
+            def disable_close():
+                pass
+
+            def back_window():
+                user_window.destroy()
+                page.deiconify()
+
+
+            def display_user_info(user_id):
+
+                def disable_close():
+                    pass
+
+                def back_window():
+                    user_info_window.destroy()
+                    display_user()
+
+                def delete_user(user_id, image_path):
+                    confirm = messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete user '{user_id}'?")
+                    if confirm: 
+                        success, msg = Test2.delete_user(user_id, image_path)
+
+                        if success:
+                            messagebox.showinfo("Success", msg)
+                            user_info_window.destroy()  
+                            display_user()
+                        else:
+                            messagebox.showerror("Error", msg)
+
+                user_window.destroy()
+                user_info_window = Toplevel()
+                user_info_window.geometry("650x300")
+                user_info_window.title(f"{user_id}'s information")
+
+                user_info_window.resizable(False, False)
+
+                user_info_window.focus_set()
+                user_info_window.grab_set()
+
+
+
+                user_info_window.protocol("WM_DELETE_WINDOW", disable_close)
+
+                
+                # user_info_window.geometry(f"+{user_window.winfo_x() + 300}+{user_window.winfo_y() + 200}")
+                
+
+                isTrue, errorMessage, info = Test2.display_user_info(user_id)
+
+                top_frame = Frame(user_info_window)
+                top_frame.pack(side = TOP, padx = 10, pady = 10)
+
+                photo_frame = Frame(top_frame)
+                photo_frame.pack(side = LEFT, padx = 10, pady = 10)
+
+                info_frame = Frame(top_frame)
+                info_frame.pack(side = RIGHT, padx = 10, pady = 10)
+
+                button_frame = Frame(user_info_window)
+                button_frame.pack(side=BOTTOM, pady=10)
+      
+
+                def edit_user():
+                    department_input.config(state='normal')
+                    edit_btn.pack_forget()
+                    delete_btn.pack_forget()
+                    back_btn.pack_forget()
+                    cancel_btn.pack(side = LEFT, padx = 5)
+                    confirm_btn.pack(side = LEFT, padx = 5)
+                
+
+                def cancel_edit(department_value):
+                    confirm_btn.pack_forget()
+                    cancel_btn.pack_forget()
+                    department_input.delete(0, END)
+                    department_input.insert(0, department_value)
+                    department_input.config(state='readonly')
+                    edit_btn.pack(side=LEFT, padx=5)
+                    delete_btn.pack(side=LEFT, padx=5)
+                    back_btn.pack(side = LEFT, padx = 5)
+
+                def confirm_edit(user_id, department_value):
+                    confirm = messagebox.askyesno("Confirm Edit", f"Are you sure you want to modify user '{user_id}' data?")
+                    if confirm:
+                        new_department_value = department_input.get()
+                        success, msg = Test2.update_user_info(user_id, new_department_value)
+
+                        if success: 
+                            messagebox.showinfo("Success", msg)
+                            department_input.config(state='readonly')
+                            edit_btn.pack(side=LEFT, padx=5)
+                            delete_btn.pack(side=LEFT, padx=5)
+                            back_btn.pack(side = LEFT, padx = 5)
+
+                        else:
+                            messagebox.showerror("Fail", msg)
+                            cancel_edit(department_value)
+                    else: 
+                        cancel_edit(department_value)
+
+                if isTrue: 
+                    full_image_path = Test2.get_profile_img(info[0][0], info[0][2])
+                    
+                    if full_image_path:
+                        try:
+                            img = Image.open(full_image_path)
+                            img = img.resize((200, 200))  # Resize as needed
+                            user_img = ImageTk.PhotoImage(img)
+
+                            img_label = Label(photo_frame, image=user_img)
+                            img_label.image = user_img  # Prevent garbage collection
+                            img_label.grid(row=0, column=0, rowspan=4, padx=10, pady=10)
+                        except Exception as e:
+                            messagebox.showerror("Error", e)
+                            img_label = Label(photo_frame, text="Error loading image")
+                            img_label.grid(row=0, column=0, rowspan=4, padx=10, pady=10)
+
+                    else:
+                        img_label = Label(photo_frame, text="Image not found")
+                        img_label.grid(row=0, column=0, rowspan=4, padx=10, pady=10)
+
+
+
+
+
+                    user_id_label = Label(info_frame, text = f"User ID: {info[0][0]}")
+                    user_id_label.grid(row = 0, column = 0, padx = 5, pady = 5, sticky = 'nw')
+
+                    department_label = Label(info_frame, text = "Department: ")
+                    department_label.grid(row = 1, column = 0, padx = 5, pady = 5 , sticky = 'nw')
+
+                    department_input = Entry(info_frame)
+                    department_input.grid(row = 1, column = 1, padx = 5, pady = 5, sticky = 'nw')
+                    department_value = info[0][1] if info[0][1] is not None else ""
+                    department_input.insert(0, department_value)
+                    department_input.config(state='readonly')
+
+                    image_path_label = Label(info_frame, text = f"Image Path: {info[0][2]}")
+                    image_path_label.grid(row = 2, column = 0, padx = 5, pady = 5, sticky = 'nw')     
+
+                    created_by_label = Label(info_frame, text = f"Created By: {info[0][3]}")
+                    created_by_label.grid(row = 3, column = 0, padx = 5, pady = 5, sticky = 'nw')
+
+                    edit_btn = Button(button_frame, text= "Edit", width = 20, command = edit_user)
+                    edit_btn.pack(side=LEFT, padx=5)
+
+                    delete_btn = Button(button_frame, text= "Delete", width = 20, command = lambda: delete_user(info[0][0], info[0][2]))
+                    delete_btn.pack(side=LEFT, padx=5)
+
+                    back_btn = Button(button_frame, text = "Back", width = 20, command = back_window)
+                    back_btn.pack(side = LEFT, padx = 5)
+
+                    confirm_btn = Button(button_frame, text = "Confirm", width = 20, command= lambda: confirm_edit(info[0][0], department_value))
+                    cancel_btn = Button(button_frame, text = "Cancel", width = 20, command = lambda: cancel_edit(department_value))                    
+
+
+
+            if(page.winfo_exists):
+                page.withdraw()
+            user_window = Toplevel()
+            user_window.geometry("800x600")
+            user_window.title("User_ID")
+
+            user_window.resizable(False, False)
+
+            user_window.focus_set()
+            user_window.grab_set() 
+
+            user_window.geometry(f"+{user_window.winfo_x() + 300}+{user_window.winfo_y() + 200}")
+
+            
+            user_window.protocol("WM_DELETE_WINDOW", disable_close)
+
+            user_id_frame = Frame(user_window)
+            user_id_frame.pack(side = TOP, padx = 0, pady = 5)
+
+            button_frame = Frame(user_window)
+            button_frame.pack(side = BOTTOM, padx = 0, pady = 5)
+
+            success, message, user_data = Test2.display_user()
+
+            if success: 
+                total_user = len(user_data)
+                total_columns = (total_user + 14) // 15
+
+                if total_columns >= 5:
+                    display_user_frame = Frame(user_window)
+                    display_user_frame.pack(fill = BOTH, expand = 1)
+
+                    canvas = Canvas(display_user_frame)
+                    canvas.pack(side = "top", fill = "both", expand = 1)
+
+                    scrollbar = Scrollbar(user_window, orient = "horizontal", command = canvas.xview)
+                    scrollbar.pack(side = "bottom", fill = X)
+
+                    canvas.configure(xscrollcommand = scrollbar.set)
+                    canvas.bind('<Configure>', lambda e: canvas.configure(scrollregion = canvas.bbox('all')))
+
+                    second_display_frame = Frame(canvas)
+                    canvas.create_window((0,0), window = second_display_frame, anchor = 'nw')
+
+                    parent_frame = second_display_frame
+                
+                else:
+                    parent_frame = Frame(user_id_frame)  
+                    parent_frame.pack(fill="both", expand=True) 
+                
+                count = 0
+
+                for user_id in user_data:
+                    column = count // 15
+                    row = count % 15
+                    user_btn = Button(parent_frame, fg = "Black", width = 20, text = user_id, command = lambda uid=user_id: display_user_info(uid))
+                    user_btn.grid(row = row, column = column, padx = 5, pady = 5)
+                    count += 1
+
+                back_btn = Button(button_frame, text = "Back", width = 50, command = back_window)
+                back_btn.grid(row = 16, column = 0)
+            else: 
+                messagebox.showerror("Error: ", message)
+                user_window.destroy()
         
+        def train_modeL():
+            popup = Toplevel()
+            popup.title("Training Model")
+            popup.geometry("300x100")
+            popup.resizable(False, False)
+            popup.transient(page)
+            popup.lift()
+
+            Label(popup, text = "Training Model... \nPlease wait.").pack(pady= 20)
+            popup.grab_set()
+            popup.protocol("WM_DELETE_WINDOW", lambda: None)  
+
+            popup.geometry(f"+{page.winfo_x() + 300}+{page.winfo_y() + 200}")
+
+
+            def run_training():
+                message = Test2.precompute_embeddings()
+                popup.destroy()
+                messagebox.showinfo("Success", message)
+            
+            threading.Thread(target=run_training).start()
+
+            
+
+        
+        page.protocol("WM_DELETE_WINDOW", disable_close)
+
         camera_sensor_btn = Button(page, bg = "Black", text="Loading....", command = camera_sensor_btn_click, width = 70, height = 35)
         camera_sensor_btn.grid(row=0, rowspan = 15, column=0, padx=20, pady=10)  
 
-        add_admin_btn = Button (page, text = "Add Admin", width = 30, command = admin_registration)
+        add_admin_btn = Button (page, text = "Add New Admin", width = 30, height = 5, command = admin_registration)
         add_admin_btn.grid(row=4 , column=1, padx=0, pady=0)  
 
-        add_user_btn = Button(page, text = "Add New User", width = 30, height = 8, command = add_user_page)
+        add_user_btn = Button(page, text = "Add New User", width = 30, height = 5, command = add_user_page)
         add_user_btn.grid(row = 5, column = 1, padx=0, pady=0)
 
-        attendance_button = Button(page, text = "Identify User", width = 30, height = 8, command = attendance)
+        attendance_button = Button(page, text = "Take Attendance", width = 30, height = 5, command = attendance)
         attendance_button.grid (row = 6, column = 1, padx=0, pady=0)
 
-        train_model_btn = Button(page, text = "Train Model", width = 30, height = 8)
+        train_model_btn = Button(page, text = "Train Model", width = 30, height = 5, command = train_modeL)
         train_model_btn.grid(row = 7, column = 1, padx=0, pady=0)
 
         page_msg_label = Label(page, text = "Camera Closed", fg = 'Red', font=("Arial", 20))
         page_msg_label.grid(row = 15, column = 0, padx = 20, pady=0, sticky= "NW")
+
+        display_user_btn = Button(page, text = "User Information", fg = "Black", width = 30, height = 5, command = display_user)
+        display_user_btn.grid(row = 8, column =  1, padx=0, pady=0)
             
-        logout_btn = Button(page, text="Logout", command=logout, width=30)
-        logout_btn.grid(row = 9, column = 1, padx=10, pady=10)
+        logout_btn = Button(page, text="Logout", command=logout, width=30, height = 5)
+        logout_btn.grid(row = 9, column = 1, padx=10, pady=5)
 
 def main():
     isTrue, message = Test2.intialise_database()
