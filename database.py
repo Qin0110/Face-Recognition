@@ -9,9 +9,9 @@ def get_connection():
     
         connection = pyodbc.connect(
             "DRIVER={ODBC Driver 17 for SQL Server};"
-            "SERVER=localhost\\SQLEXPRESS;"
+            "SERVER=localhost\\LGW;"
             "UID=sa;"
-            "PWD=123456;"
+            "PWD=smart;"
             "Encrypt=yes;"
             "TrustServerCertificate=yes;"
             "Connection Timeout=5;"
@@ -19,7 +19,8 @@ def get_connection():
         connection.autocommit = True
         return connection.cursor()
     except Exception as e:
-        return e
+        ##if return will not exit the program
+        #print(e)
         exit()
 
 
