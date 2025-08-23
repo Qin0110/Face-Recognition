@@ -3,11 +3,19 @@ import os
 from datetime import datetime
 import numpy as np
 import database
-from keras_facenet import FaceNet
 from PIL import Image, ImageTk
+import GuanWeiPreprocessing as preprocessing
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import torch
+from facenet_pytorch import InceptionResnetV1
+import torch.nn.functional as F
+import joblib
 
-embedder = FaceNet() 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+model = InceptionResnetV1(pretrained='vggface2').eval().to(device)
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
 def check_user_exists(user_id):
@@ -16,7 +24,7 @@ def check_user_exists(user_id):
 def add_new_user(name, department = None, created_by = None):
     
     try:
-        user_dir = os.path.join("Data\\Train", name)
+        user_dir = os.path.join("Datasets", name)
 
         if os.path.exists(user_dir):
             return False, f"User directory already exists for {name}"
@@ -74,19 +82,31 @@ def update_user_info(user_id, department_new):
 
 
 def get_embedding(face_img):
-    # RGB and size (160x160)
-    if len(face_img.shape) == 3:
-        face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB) ##color image(bgr) to rgb
-    else:
-        face_img = cv2.cvtColor(face_img, cv2.COLOR_GRAY2RGB) ##gray image to rgb
-    
-    face_img = cv2.resize(face_img, (160, 160))
-    face_img = face_img.astype('float32')
-    face_img = np.expand_dims(face_img, axis=0)
-    result = embedder.embeddings(face_img)
-    return result[0]  # return 512D embedding
+    try:
+        # Ensure RGB format
+        if len(face_img.shape) == 3:
+            face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+        else:
+            face_img = cv2.cvtColor(face_img, cv2.COLOR_GRAY2RGB)
 
-def load_embeddings(path):
+        # Resize to FaceNet expected size
+        face_img = cv2.resize(face_img, (160, 160))
+
+        # Convert to tensor [0,1] → normalize to [-1,1]
+        face_tensor = torch.tensor(face_img, dtype=torch.float32).permute(2, 0, 1) / 255.0
+        face_tensor = (face_tensor - 0.5) / 0.5
+        face_tensor = face_tensor.unsqueeze(0).to(device)  # Add batch dim, send to GPU
+
+        # Get embedding
+        with torch.no_grad():
+            embedding = model(face_tensor).squeeze(0)  # Shape (512,)
+
+        return embedding  # Still on GPU
+
+    except Exception as e:
+        raise e
+
+def trainData(path):
     embeddings = []
     labels = []
 
@@ -95,76 +115,219 @@ def load_embeddings(path):
         
         if not os.path.isdir(user_path):
             continue
-
-        user_embedding = []
         
         for image_name in os.listdir(user_path):
             image_path = (user_path + '\\' + image_name)
             img = cv2.imread(image_path)
+
             if img is None:
                 continue
 
             try:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
                 embedding = get_embedding(img)
-                user_embedding.append(embedding)
+                embeddings.append(embedding)
+                labels.append(user)
+                del img
+
             except Exception as e:
                 continue
 
-        if user_embedding:
+    embeddings_tensor = torch.stack(embeddings, dim=0)
+    return embeddings_tensor, labels
 
-            # average embeddings for each person 
-            avg_embedding = np.mean(user_embedding, axis=0)
-            embeddings.append(avg_embedding)
-            labels.append(user)
+def testData(path, threshold):
+    true_positive = 0 
+    true_negative = 0
+    false_positive = 0
+    false_negative = 0
 
-    return np.array(embeddings), np.array(labels)
+    stored_embeddings, stored_labels = load_precomputed_embeddings()
+
+    if stored_embeddings is None:
+        return 0, 0, 0, 0
+    
+    # safe conversion of 'stored_embeddings' to device float tensor
+    if isinstance(stored_embeddings, torch.Tensor):
+        stored_embeddings = stored_embeddings.clone().detach().to(device).float()
+    elif isinstance(stored_embeddings, np.ndarray):
+        stored_embeddings = torch.from_numpy(stored_embeddings.astype('float32')).to(device)
+    else:
+        # fallback: try to make a numpy array first
+        stored_embeddings = torch.tensor(np.array(stored_embeddings, dtype='float32'), dtype=torch.float32, device=device)
+
+
+    for user in os.listdir(path):
+        user_path = (path + '\\' + user)
+        
+        if not os.path.isdir(user_path):
+            continue
+
+        for image_name in os.listdir(user_path):
+            image_path = (user_path + '\\' + image_name)
+
+            img = cv2.imread(image_path)
+
+            if img is None:
+                continue
+            # GrayScale = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # faces = face_cascade.detectMultiScale(GrayScale, scaleFactor=1.1, minNeighbors=4)
+
+            # if len(faces) == 0:
+            #     continue
+
+            # x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+
+            # x2 = min(img.shape[1], x + w)
+            # y2 = min(img.shape[0], y + h)
+            # face_crop = img[y:y2, x:x2]
+            # if face_crop.size == 0:
+            #     continue
+
+            # face_crop = cv2.cvtColor(face_crop, cv2.COLOR_BGR2RGB)
+            # face_crop = cv2.resize(face_crop, (160, 160))
+            
+            try: 
+                test_embedding = get_embedding(img)
+
+                identified_user, distance = identify_face_cosine(test_embedding, stored_embeddings, stored_labels, threshold)
+
+                if identified_user is not None and identified_user == user: 
+                    true_positive += 1
+                elif identified_user is not None and identified_user != user:
+                    false_positive += 1
+                elif identified_user is None and user not in stored_labels: 
+                    true_negative += 1
+                else: 
+                    false_negative += 1
+
+                del img 
+
+            except Exception as e:
+                continue
+
+    return true_positive, true_negative, false_positive, false_negative
+
+def accuracy_calc(tp, tn, fp, fn):
+
+    #precision
+    if tp + fp == 0:
+        precision = 0.0
+    else: 
+        precision = tp / (tp + fp)
+
+    #recall
+    if tp + fn == 0:
+        recall = 0.0
+    else:
+        recall = tp / (tp + fn)
+    
+    #f1 score
+    if precision + recall == 0:
+        f1_score = 0.0  
+    else:
+        f1_score = 2 * ((precision * recall) / (precision + recall))
+
+    #accuracy
+    if tn + fp + tp + fn == 0:
+        accuracy = 0 
+    else: 
+        accuracy = (tn + tp)/ (tn + fp + tp + fn)
+
+    return precision, recall, f1_score, accuracy
+
 
 def precompute_embeddings():
-    path = 'Data\\Train'
-    embeddings_path = 'Data\\embeddings.npz'
+
+    train_path = f'Data\\train'
+    test_path = f'Data\\test'
+    embeddings_path = 'Data\\embeddings.pkl'
+
+    TEST_SIZE = 0.3
+    threshold = 0.6
+
+    preprocessing.Rescalling()
+    preprocessing.PreProcess('facenet',TEST_SIZE)
     
+        
+    embeddings, labels = trainData(train_path)
+
+    embeddings = embeddings.cpu().numpy()
+
+    joblib.dump({"embeddings": embeddings, "labels": labels}, embeddings_path)
+
+
+    true_positive, true_negative, false_positive, false_negative = testData(test_path, threshold)
+    precision, recall, f1_score, accuracy = accuracy_calc(true_positive, true_negative, false_positive, false_negative)
+
+    print(f"TP: {true_positive}, TN: {true_negative}, FP: {false_positive}, FN: {false_negative}")
+    print(f"Precision: {precision:.3f}, Recall: {recall:.3f}, F1: {f1_score:.3f}, Accuracy: {accuracy:.3f}")
+
+        
+    precision, recall, f1_score, accuracy = accuracy_calc(true_positive, true_negative, false_positive, false_negative)
     
-    embeddings, labels = load_embeddings(path)
+    metrics = ['Accuracy', 'Precision', 'Recall', 'F1 Score']
+    values = [accuracy, precision, recall, f1_score]
+
+    plt.figure(figsize=(6,4))
+    plt.bar(metrics, values, color=['skyblue', 'orange', 'green', 'red'])
+    plt.ylim(0, 1)
+    plt.title("Model Performance Metrics")
+    plt.ylabel("Score")
+    plt.show()
     
-    
-    np.savez(embeddings_path, embeddings=embeddings, labels=labels)
+
+    conf_matrix = np.array([[true_positive, false_negative],
+                        [false_positive, true_negative]])
+
+    plt.figure(figsize=(5,4))
+    sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
+                xticklabels=['Predicted Positive', 'Predicted Negative'],
+                yticklabels=['Actual Positive', 'Actual Negative'])
+    plt.title("Confusion Matrix")
+    plt.show()
+
     return (f"Saved embeddings for {len(labels)} users")
     
 
-def load_precomputed_embeddings():
-
-    embeddings_path = 'Data\\embeddings.npz'
+def load_precomputed_embeddings(embeddings_path = 'Data\\embeddings.pkl'):
 
     if not os.path.exists(embeddings_path):
         return None, None
     
     try:
-        data = np.load(embeddings_path)
-        embeddings = data['embeddings']
+      
+        data = joblib.load(embeddings_path)
+
+        embeddings = torch.tensor(data['embeddings'], dtype=torch.float32, device=device)        
         labels = data['labels']
         return embeddings, labels
     except Exception as e:
         return None, None
 
-def identify_face_euclidean(face_embedding, stored_embeddings, stored_labels, threshold=0.6):
+def identify_face_cosine(face_embedding, stored_embeddings, stored_labels, threshold=0.6):
     if stored_embeddings is None or len(stored_embeddings) == 0:
         return None, float('inf')
-    
-    min_distance = float('inf')
-    best_match = None
-    
-    for i, stored_embedding in enumerate(stored_embeddings):
-        distance = np.linalg.norm(face_embedding - stored_embedding)
-        
-        if distance < min_distance:
-            min_distance = distance
-            best_match = stored_labels[i]
-    
-    # return match only if distance is below threshold
-    if min_distance <= threshold:
-        return best_match, min_distance
+
+    # ensure embedding is a 1D torch tensor on same device as stored_embeddings
+    if not isinstance(face_embedding, torch.Tensor):
+        face_embedding = torch.tensor(face_embedding, dtype=torch.float32, device=stored_embeddings.device)
     else:
-        return None, min_distance
+        face_embedding = face_embedding.to(stored_embeddings.device).float()
+
+    # compute cosine similarities with all stored embeddings
+    similarities = F.cosine_similarity(face_embedding.unsqueeze(0), stored_embeddings)  # shape: [num_embeddings]
+    
+    # find best match
+    max_sim, idx = torch.max(similarities, dim=0)
+    distance = 1 - max_sim.item()  # cosine distance
+
+    if distance <= threshold:
+        return stored_labels[idx.item()], distance
+    else:
+        return None, distance
 
 def verificationImages(img):
 
@@ -173,10 +336,10 @@ def verificationImages(img):
     if blurValue < 30:
         return False
         
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    rgbImage = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     ### multiple faces
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+    faces = face_cascade.detectMultiScale(rgbImage, scaleFactor=1.1, minNeighbors=4)
 
     if len(faces) != 1:
         return False
@@ -194,7 +357,7 @@ def verificationImages(img):
 
 def capturing_images(frame, face_crop, name, count):
     if verificationImages(frame):
-        cv2.imwrite(f"Data\\Train\\{name}\\{name}_{count}.jpg", cv2.resize(face_crop, (250, 250)))
+        cv2.imwrite(f"Datasets\\{name}\\{name}_{count}.jpg", cv2.resize(face_crop, (250, 250)))
         return True
     else: 
         return False
@@ -256,7 +419,7 @@ def update_camera(cam, mode, status, username, camera_label, page, stored_embedd
     resultNum = []
     count = 0
     is_updating = True
-    max_count = 100 if mode == 'capture' else 10 if mode == 'attendance' else 0
+    max_count = 100 if mode == 'capture' else 100 if mode == 'attendance' else 0
 
     while (count < max_count if mode == 'capture' else count < max_count if mode == 'attendance' else is_updating):                
         if not is_updating:  
@@ -266,8 +429,8 @@ def update_camera(cam, mode, status, username, camera_label, page, stored_embedd
             isTrue, frame = cam.read()
 
             if isTrue:
-                grayImage = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                face_detection = face_cascade.detectMultiScale(grayImage, scaleFactor=1.1, minNeighbors=5)       
+                rgbImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                face_detection = face_cascade.detectMultiScale(rgbImage, scaleFactor=1.1, minNeighbors=4)       
                 if len(face_detection) > 0:
                     cv2.putText(frame, f"Faces detected: {len(face_detection)}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 else:
@@ -283,7 +446,7 @@ def update_camera(cam, mode, status, username, camera_label, page, stored_embedd
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                             count += 1
 
-                        if count >= 10:  # Stop after 10 captures
+                        if count >= 100:  # Stop after 100 captures
                             close_camera(cam)
                             camera_label.grid_remove()
                             is_updating = False
@@ -296,7 +459,7 @@ def update_camera(cam, mode, status, username, camera_label, page, stored_embedd
                             try:
                                 face_embedding = get_embedding(face_crop)
 
-                                identified_user, distance = identify_face_euclidean(face_embedding, stored_embeddings, stored_labels)
+                                identified_user, distance = identify_face_cosine(face_embedding, stored_embeddings, stored_labels)
                                 
                                 if identified_user is not None:
                                     cv2.rectangle(frame, (x-2, y-2), (x+w+2, y+h+2), (0, 255, 0), 2)
@@ -339,15 +502,12 @@ def update_camera(cam, mode, status, username, camera_label, page, stored_embedd
         return isTrue, message
     return None, None
 
-
-
-
 def intialise_database():
     isTrue, message = database.intialise_database(database.get_connection())
 
     if isTrue:
-        if(not os.path.exists("Data\\Train")):
-            os.makedirs("Data\\Train")
+        if(not os.path.exists("Datasets")):
+            os.makedirs("Datasets")
             return True, None
     else:
         deleted, error_delete = database.deleteDatabase(database.get_connection())
@@ -358,6 +518,8 @@ def intialise_database():
             return False, error_delete
     
     return True, None
+
+
 
 
 

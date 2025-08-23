@@ -22,17 +22,19 @@ class FaceRecognitionApp:
 
     def setup_login_page(self):
 
+        def on_close():
+            if messagebox.askyesno("Quit", "Do you really want to quit?"):
+                # cleanup here if needed
+                self.root.destroy()
+                exit()
+
         def login_check():
             admin_id = id_input.get().strip()
-            admin_pass = pass_input.get()
+            admin_pass = pass_input.get().strip().replace(" ", "")
 
             if admin_id == "" or admin_pass == "":
                 error_msg_label.config(text = "Please enter both ID and Password.")
                 return
-            
-            if admin_pass.endswith(" "):
-                error_msg_label.config(text = "Password cannot end with space")
-                return 
             
             exists, message = Test2.check_admin_exists(admin_id, admin_pass)
 
@@ -67,7 +69,7 @@ class FaceRecognitionApp:
         login_button = Button(login_frame, text="Login", command = login_check, width = 20) ##
         login_button.grid(row=3, column = 1, pady=5, sticky = 'e', padx = 5)
 
-
+        self.root.protocol("WM_DELETE_WINDOW", on_close)
 
 
 
@@ -182,7 +184,7 @@ class FaceRecognitionApp:
                 elif admin_pass == "":
                       error_msg_label.config(text = "Password cannot be empty.", fg = "red")
                       return
-                elif admin_pass.endswith(" "):
+                elif admin_pass != admin_pass.rstrip():
                     error_msg_label.config(text = "Password cannot end with space", fg = "red")
                     return
                 else: 
@@ -627,6 +629,8 @@ def main():
         root = Tk()
         app = FaceRecognitionApp(root)
         root.mainloop()
+
+    
     else: 
         messagebox.showerror("Database Initialization Error", message)
         exit()
