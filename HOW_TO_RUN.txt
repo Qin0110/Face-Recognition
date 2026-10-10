@@ -1,0 +1,94 @@
+FACE RECOGNITION ATTENDANCE SYSTEM - HOW TO RUN
+================================================
+
+Only two files need to be run:
+
+  1. setup.bat  -> installs everything (run ONCE per computer)
+  2. run.bat    -> starts the application (run EVERY time)
+
+
+REQUIREMENTS
+------------
+- Windows 10 or Windows 11 (64-bit)
+- A webcam
+- Internet connection (only needed for setup.bat)
+- About 5 GB of free disk space
+
+
+FIRST TIME ON A COMPUTER
+------------------------
+Step 1: Unzip or clone the project folder.
+
+Step 2: Double-click "setup.bat".
+        - A black window opens and installs everything automatically:
+          Python 3.12 (if missing), all packages, the database and the
+          face recognition model.
+        - It takes about 15-40 minutes depending on the internet speed.
+        - Wait until it shows "Setup completed successfully",
+          then press any key to close the window.
+
+Step 3: Double-click "run.bat" to open the application.
+
+
+EVERY TIME AFTER THAT
+---------------------
+Just double-click "run.bat".
+There is no need to run setup.bat again on the same computer.
+
+
+LOGIN
+-----
+Admin ID : admin
+Password : admin
+
+(Another default account: ADMIN / ADMIN)
+Create your own admin account from "Add New Admin" before real use.
+
+
+FIRST STEPS IN THE APPLICATION
+------------------------------
+No faces are included, so start by registering people.
+
+1. Add New User      -> enter the User ID, then look at the camera
+                        until 70 face photos are captured. Move your
+                        head slightly so the photos are not identical.
+2. Train Model       -> must be clicked after adding a new user
+                        or after retaking photos.
+3. Take Attendance   -> choose Enter or Exit, then look at the camera.
+4. Attendance Records-> view attendance and export it to a CSV file.
+5. User Information  -> view, edit, delete a user or retake photos.
+
+Click the black camera area to open or close the live camera.
+
+
+MOVING TO ANOTHER COMPUTER
+--------------------------
+- Copy or zip the whole project folder.
+- The "env" and "models" folders can be deleted before copying to make
+  it much smaller. setup.bat creates them again.
+- Keep "face_recognition.db" (attendance records) and the "Datasets"
+  folder (face photos) if you want to keep the registered people.
+- On the new computer: run setup.bat once, then run.bat.
+
+
+RUN SETUP.BAT AGAIN IF
+----------------------
+- The project was moved to a different computer.
+- run.bat says "The environment is not ready on this computer yet"
+  (it will offer to run setup.bat for you, press Y).
+- The "env" folder was deleted.
+- requirements.txt was changed.
+
+
+TROUBLESHOOTING
+---------------
+- setup.bat failed      : check the internet connection and run
+                          setup.bat again. It continues from where
+                          it stopped.
+- Camera does not open  : make sure no other app (Zoom, Teams, camera
+                          app) is using the webcam.
+- "No trained data found": click "Train Model" in the application.
+- Nobody is recognised  : retake the photos in better light and
+                          train again.
+- Any unexpected error  : details are saved in "error.log" in the
+                          project folder.
